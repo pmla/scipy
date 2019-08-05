@@ -211,6 +211,7 @@ class Rotation(object):
     __mul__
     inv
     magnitude
+    fundamental
     __getitem__
     random
     match_vectors
@@ -889,7 +890,7 @@ class Rotation(object):
         >>> r.as_quat().shape
         (1, 4)
 
-        Represent multiple rotaions in a single object:
+        Represent multiple rotations in a single object:
 
         >>> r = R.from_rotvec([[np.pi, 0, 0], [0, 0, np.pi/2]])
         >>> r.as_quat().shape
@@ -1326,7 +1327,7 @@ class Rotation(object):
         Parameters
         ----------
         other : `Rotation` instance
-            Object containing the rotaions to be composed with this one. Note
+            Object containing the rotations to be composed with this one. Note
             that rotation compositions are not commutative, so ``p * q`` is
             different from ``q * p``.
 
@@ -1451,13 +1452,56 @@ class Rotation(object):
         3.141592653589793
         """
 
-        cosines = self._quat.reshape((len(self), 4))[:, 3]
-        cosines = np.minimum(1, np.abs(cosines))
-        angles = 2 * np.arccos(cosines)
+        quat = self._quat.reshape((len(self), 4))
+        s = np.linalg.norm(quat[:, :3], axis=1)
+        c = np.abs(quat[:, 3])
+        angles = 2 * np.arctan2(s, c)
+
         if self._single:
             return angles[0]
         else:
             return angles
+
+    def fundamental(self, group):
+        """Get the fundamental zone representation of the rotation(s).
+
+        Parameters
+        ----------
+        group : `Rotation` instance
+            Object containing the elements of the rotation group.
+
+        Returns
+        -------
+        fundamental : `Rotation` instance
+            Object containing fundamental zone representations of the rotations
+            in the current instance.
+
+        Examples
+        --------
+        >>> from scipy.spatial.transform import rotation_group
+        >>> from scipy.spatial.transform import Rotation as R
+        >>> r = R.from_quat([0.5, 0.5, 0.5, 0.5])
+        >>> r.fundamental(rotation_group('O')).as_quat()
+        array([0., 0., 0., 1.])
+
+        >>> r.fundamental(rotation_group('C2')).as_quat()
+        array([0.5, 0.5, 0.5, 0.5])
+        """
+
+        qsym = group.as_quat()
+
+        qs = self._quat.copy()
+        dots = np.outer(qs[:, 3], qsym[:, 3])
+        dots -= np.outer(qs[:, 0], qsym[:, 0])
+        dots -= np.outer(qs[:, 1], qsym[:, 1])
+        dots -= np.outer(qs[:, 2], qsym[:, 2])
+        dots = np.minimum(1, np.abs(dots))
+
+        f = self * group[np.argmax(dots, axis=1)]
+        if self._single:
+            return f[0]
+        else:
+            return f
 
     def __getitem__(self, indexer):
         """Extract rotation(s) at given index(es) from object.

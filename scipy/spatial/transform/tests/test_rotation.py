@@ -8,6 +8,7 @@ from numpy.testing import assert_allclose
 from scipy.spatial.transform import Rotation, Slerp
 from scipy.stats import special_ortho_group
 from itertools import permutations
+from scipy.spatial.transform import rotation_group
 
 
 def test_generic_quat_matrix():
@@ -626,6 +627,10 @@ def test_magnitude():
     result = r.magnitude()
     assert_array_almost_equal(result, [np.pi, np.pi, np.pi, 0])
 
+    r = Rotation.from_quat(-np.eye(4))
+    result = r.magnitude()
+    assert_array_almost_equal(result, [np.pi, np.pi, np.pi, 0])
+
 
 def test_magnitude_single_rotation():
     r = Rotation.from_quat(np.eye(4))
@@ -969,3 +974,13 @@ def test_slerp_call_time_out_of_range():
         s([0, 1, 2])
     with pytest.raises(ValueError, match="times must be within the range"):
         s([1, 2, 6])
+
+
+def test_fundamental_zone():
+
+    ns = [str(i) for i in range(1, 13)]
+    groups = ['I', 'O', 'T'] + ['C' + n for n in ns] + ['D' + n for n in ns]
+    for name in groups:
+        g = rotation_group(name)
+        f = g.fundamental(g)
+        assert_array_almost_equal(f.magnitude(), np.zeros(len(g)))
